@@ -1,0 +1,38 @@
+name: "create release"
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup golang environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Make sure app can build
+        run: make build
+      
+      - name: Rename executable
+        shell: bash
+        run: |
+          mv build/usr/bin/fishymetrics build/usr/bin/fishymetrics-linux-amd64
+          for filename in *.log; do
+            [ -e "$filename" ] || continue;
+            sha256sum "$filename" >> checksum.txt;
+          done
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/usr/bin/*
