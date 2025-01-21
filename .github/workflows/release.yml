@@ -1,0 +1,45 @@
+name: "create release"
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+-[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup golang environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y git make
+          go mod tidy
+      - name: Make sure app can build
+        run: make static
+      - name: Rename executable and calculate checksums
+        shell: bash
+        run: |
+          mv build/usr/bin/fishymetrics build/usr/bin/fishymetrics-linux-amd64
+          for filename in build/usr/bin/*; do
+            [ -e "$filename" ] || continue;
+            sha256sum "$filename" >> checksum.txt;
+          done
+      - name: Create Release
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+              build/usr/bin/* \
+              checksum.txt \
+              --verify-tag \
+              --generate-notes
