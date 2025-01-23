@@ -21,7 +21,9 @@ jobs:
           go-version: "1.22"
 
       - name: Install dependencies
-        run: go mod tidy
+        run: |
+          dnf install -y git make
+          go mod tidy
 
       - name: Make sure app can build
         run: make build
