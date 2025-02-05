@@ -50,10 +50,14 @@ func Fetch(uri, host, profile string, client *retryablehttp.Client) func() ([]by
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
+		defer EmptyAndCloseBody(resp)
 		if !(resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices) {
+			// Close early to avoid leaking resources
+			EmptyAndCloseBody(resp)
+
 			if resp.StatusCode == http.StatusNotFound {
 				for retryCount < 3 && resp.StatusCode == http.StatusNotFound {
+					EmptyAndCloseBody(resp)
 					time.Sleep(client.RetryWaitMin)
 					resp, err = DoRequest(client, req)
 					if err != nil {
@@ -99,6 +103,13 @@ func Fetch(uri, host, profile string, client *retryablehttp.Client) func() ([]by
 			return nil, fmt.Errorf("Error reading Response Body - " + err.Error())
 		}
 		return body, err
+	}
+}
+
+func EmptyAndCloseBody(resp *http.Response) {
+	if resp.Body != nil {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
 	}
 }
 
