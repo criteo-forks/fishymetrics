@@ -6,28 +6,22 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+-[0-9]+'
 
 jobs:
-  release:
+  build:
+    name: Create Release
     runs-on: ubuntu-latest
-    container:
-      image: rockylinux:8
-
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup golang environment
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-
       - name: Install dependencies
         run: |
-          dnf install -y git make
+          sudo apt-get install -y git make
           go mod tidy
-
       - name: Make sure app can build
-        run: make build
-      
+        run: make static
       - name: Rename executable and calculate checksums
         shell: bash
         run: |
@@ -36,10 +30,33 @@ jobs:
             [ -e "$filename" ] || continue;
             sha256sum "$filename" >> checksum.txt;
           done
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
         with:
-          files: |
-            build/usr/bin/*
-            checksum.txt
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: ./build/usr/bin/fishymetrics-linux-amd64
+          asset_name: fishymetrics-linux-amd64
+          asset_content_type: application/octet-stream
+      - name: Upload Release Asset checksum
+        id: upload-release-asset-checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: ./checksum.txt
+          asset_name: checksum.txt
+          asset_content_type: text/plain
